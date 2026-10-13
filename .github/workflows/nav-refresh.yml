@@ -1,9 +1,10 @@
-name: Monthly NAV refresh
+name: Daily data refresh
 
 on:
   schedule:
-    # 18th of each month, 09:00 UTC (04:00 CT) - after most funds publish
-    - cron: '0 9 18 * *'
+    # Daily 09:00 UTC (04:00 CT, pre-market): refresh prices every day,
+    # NAVs update whenever the funds publish (usually mid-month)
+    - cron: '0 9 * * *'
   workflow_dispatch:  # allow manual runs from the Actions tab
 
 permissions:
@@ -22,7 +23,9 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Scrape fund sources for new NAVs
+      - name: Refresh NAVs and prices
+        env:
+          FINNHUB_KEY: ${{ secrets.FINNHUB_KEY }}
         run: python scrape_nav.py
 
       - name: Commit updated data
@@ -30,9 +33,9 @@ jobs:
           git config user.name "nav-bot"
           git config user.email "nav-bot@users.noreply.github.com"
           if git diff --quiet nav-data.json; then
-            echo "No NAV changes - nothing to commit."
+            echo "No changes - nothing to commit."
           else
             git add nav-data.json
-            git commit -m "NAV refresh $(date -u +%F)"
+            git commit -m "Data refresh $(date -u +%F)"
             git push
           fi
