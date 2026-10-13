@@ -19,7 +19,7 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-variant-numeric: tabular-nums; }
-  .clo { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
+  .clo { max-width: 1480px; margin: 0 auto; padding: 24px 20px 48px; }
   .clo-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   .clo-title { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0; }
   .clo-take { color: var(--muted); font-size: 15px; margin: 6px 0 0; min-height: 1.4em; }
@@ -46,8 +46,8 @@
   .clo-tip { position: absolute; pointer-events: none; display: none; background: #1e2425; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.5); padding: 6px 10px; font-size: 12px; white-space: nowrap; z-index: 5; }
   .clo-tip .clo-tip-h { color: var(--muted); margin-bottom: 2px; }
   .clo-tablebox { overflow: auto; max-height: 36rem; }
-  .clo table { border-collapse: collapse; width: 100%; font-size: 14px; }
-  .clo th, .clo td { padding: 7px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  .clo table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .clo th, .clo td { padding: 6px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
   .clo th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; font-size: 11px; vertical-align: bottom; cursor: pointer; user-select: none; }
   .clo th:hover { color: var(--fg); }
   .clo th[aria-sort="ascending"]::after { content: " \25B2"; }
@@ -68,6 +68,8 @@
   .clo-upd-sub { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
   .clo tr.clo-changed td { background: rgba(63, 217, 124, .09); }
   .clo tr.clo-changed td:first-child::after { content: " \25CF"; color: var(--ok); font-size: .7em; vertical-align: middle; }
+  .upd-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); margin-left: 7px; vertical-align: 1px; box-shadow: 0 0 8px rgba(63, 217, 124, .9); animation: upd-pulse 1.2s ease-in-out 3; }
+  @keyframes upd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
   .clo-src { color: var(--muted); font-size: 11px; margin-top: 16px; line-height: 1.6; }
   .clo-src a { color: var(--muted); }
 </style>
@@ -81,6 +83,8 @@
     </div>
     <div class="clo-tools">
       <span class="clo-asof">Prices as of <span id="price-asof">&mdash;</span></span>
+      <button class="clo-btn" id="btn-data-refresh" type="button">Refresh data</button>
+      <span class="clo-asof" id="refresh-status"></span>
     </div>
   </div>
 
@@ -130,7 +134,7 @@
 
   <div class="clo-card" id="fund-table">
     <h3>Funds</h3>
-    <p class="clo-note">Click a column to sort. Price, market cap, premium/discount and yield move with the price feed; NAV, shares and distributions are from the latest posted figures.</p>
+    <p class="clo-note">Click a column to sort. Price, market cap, premium/discount and yield move with the price feed; NAV, shares and distributions are from the latest posted figures. A <span class="upd-dot"></span> marks a value that changed in the latest data refresh.</p>
     <div class="clo-tablebox">
       <table id="tbl">
         <thead>
@@ -189,6 +193,7 @@ let PRICES = {
 let PRICE_LABEL = "10/12/2026 Nasdaq close (4:00 PM ET)";
 let CHANGED = new Set(); // derived from changed_on dates (recent changes highlight)
 let DATA_ASOF = null;    // max checked_on from the loaded dataset
+let DOT_FIELDS = new Map(); // ticker -> Set of row fields that changed in the latest refresh (green dots)
 
 function refreshChangedSet() {
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
@@ -319,11 +324,17 @@ function drawTable() {
   tbody.replaceChildren(...rows.map((r) => {
     const tr = document.createElement('tr');
     if (CHANGED.has(r.ticker)) tr.className = 'clo-changed';
+  const dots = DOT_FIELDS.get(r.ticker);
     for (const th of ths) {
       const k = th.dataset.field, col = COLS[k], v = r[k];
       const td = document.createElement('td');
       td.textContent = v == null || Number.isNaN(v) ? '\u2014' : col.f(v);
       if (col.c && v != null) td.className = col.c(v);
+      if (dots && dots.has(k)) {
+        const d = document.createElement('span');
+        d.className = 'upd-dot'; d.title = 'Changed in the latest data refresh';
+        td.appendChild(d);
+      }
       tr.appendChild(td);
     }
     return tr;
@@ -421,31 +432,96 @@ document.getElementById('srcnote').innerHTML =
   'Fund data and prices load from nav-data.json, refreshed daily by an automated job (fund sources last checked ' +
   (DATA_ASOF ? fmt.date(DATA_ASOF) : '10/12/2026') + '; per-fund sources in the data file). ' +
   'ECC is included as a tracked fund even though the position was sold 10/7/2026. ' +
+  'Hit "Refresh data" any time to pull the latest published data and see what changed. ' +
   'This page is fully self-contained \u2014 no external libraries, no API keys, works offline.';
 
-/* ---------- Self-update: pull the latest nav-data.json on every load ---------- */
-async function loadRemoteData() {
-  try {
-    const r = await fetch('nav-data.json', { cache: 'no-store' });
-    if (!r.ok) return;
-    const j = await r.json();
-    const funds = Array.isArray(j) ? j : j.funds;
-    if (!Array.isArray(funds) || !funds.length || !funds.every((f) => f.ticker && f.latest_nav != null)) return;
-    FUNDS.length = 0;
-    for (const f of funds) FUNDS.push(f);
-    if (!Array.isArray(j) && j.prices) {
-      for (const t of Object.keys(PRICES)) {
-        if (j.prices[t] && j.prices[t].price) {
-          PRICES[t] = { price: Number(j.prices[t].price),
-                        chg_pct: j.prices[t].chg_pct != null ? Number(j.prices[t].chg_pct) : null };
-        }
-      }
-      if (j.prices_asof) PRICE_LABEL = fmt.date(j.prices_asof) + ' close (daily refresh)';
-    }
-    refreshChangedSet();
-  } catch (e) { /* keep the embedded snapshot */ }
+/* ---------- Self-update: pull the latest nav-data.json, diff it, dot what changed ---------- */
+const FUND_DOT_KEYS = ['latest_nav', 'latest_nav_date', 'prior_nav', 'prior_nav_date',
+  'nii_qtr', 'current_dist', 'qtrly_dist', 'freq', 'sh_out_mm', 'nav_post_date'];
+
+function valEq(a, b) {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  const na = Number(a), nb = Number(b);
+  if (Number.isFinite(na) && Number.isFinite(nb)) return Math.abs(na - nb) < 1e-9;
+  return String(a) === String(b);
 }
-loadRemoteData().finally(() => drawAll());
+
+function snapshotData() {
+  return { funds: FUNDS.map((f) => Object.assign({}, f)),
+           prices: Object.fromEntries(Object.entries(PRICES).map(([t, q]) => [t, Object.assign({}, q)])) };
+}
+
+function diffData(snap) {
+  const dots = new Map();
+  const oldByTicker = new Map(snap.funds.map((f) => [f.ticker, f]));
+  for (const f of FUNDS) {
+    const o = oldByTicker.get(f.ticker);
+    if (!o) continue;
+    const set = new Set();
+    for (const k of FUND_DOT_KEYS) if (!valEq(o[k], f[k])) set.add(k);
+    const op = snap.prices[f.ticker] || {}, np = PRICES[f.ticker] || {};
+    if (!valEq(op.price, np.price)) set.add('price');
+    if (!valEq(op.chg_pct, np.chg_pct)) set.add('day_chg_pct');
+    if (set.size) dots.set(f.ticker, set);
+  }
+  return dots;
+}
+
+async function refreshFromRemote(cacheBust) {
+  let r;
+  try {
+    r = await fetch('nav-data.json' + (cacheBust ? '?t=' + Date.now() : ''), { cache: 'no-store' });
+  } catch (e) { return { ok: false }; }
+  if (!r.ok) return { ok: false };
+  let j;
+  try { j = await r.json(); } catch (e) { return { ok: false }; }
+  const funds = Array.isArray(j) ? j : j.funds;
+  if (!Array.isArray(funds) || !funds.length || !funds.every((f) => f.ticker && f.latest_nav != null)) return { ok: false };
+  const snap = snapshotData();
+  FUNDS.length = 0;
+  for (const f of funds) FUNDS.push(f);
+  if (!Array.isArray(j) && j.prices) {
+    for (const t of Object.keys(PRICES)) {
+      if (j.prices[t] && j.prices[t].price) {
+        PRICES[t] = { price: Number(j.prices[t].price),
+                      chg_pct: j.prices[t].chg_pct != null ? Number(j.prices[t].chg_pct) : null };
+      }
+    }
+    if (j.prices_asof) PRICE_LABEL = fmt.date(j.prices_asof) + ' close (daily refresh)';
+  }
+  refreshChangedSet();
+  DOT_FIELDS = diffData(snap);
+  return { ok: true,
+           changed: [...DOT_FIELDS.values()].reduce((s, x) => s + x.size, 0),
+           tickers: [...DOT_FIELDS.keys()] };
+}
+
+const btnDataRefresh = document.getElementById('btn-data-refresh');
+const refreshStatus = document.getElementById('refresh-status');
+btnDataRefresh.addEventListener('click', async () => {
+  btnDataRefresh.disabled = true;
+  const orig = btnDataRefresh.textContent;
+  btnDataRefresh.textContent = 'Refreshing\u2026';
+  refreshStatus.textContent = '';
+  try {
+    const res = await refreshFromRemote(true);
+    if (!res.ok) {
+      refreshStatus.textContent = 'Could not reach the data file \u2014 showing last loaded data.';
+    } else {
+      drawAll();
+      refreshStatus.textContent = res.changed
+        ? 'Updated just now \u2014 ' + res.changed + ' value' + (res.changed === 1 ? '' : 's') +
+          ' changed (' + res.tickers.join(', ') + ').'
+        : 'Already up to date.';
+    }
+  } finally {
+    btnDataRefresh.disabled = false;
+    btnDataRefresh.textContent = orig;
+  }
+});
+
+refreshFromRemote(false).finally(() => drawAll());
 </script>
 </body>
 </html>
