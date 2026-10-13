@@ -1,8 +1,11 @@
-# CLO Fund Tracker
+# CLO Tracker Website
+
 
 A self-updating dashboard for 7 CLO closed-end funds: ECC, EIC, OXLC, SPMC, EARN, CCIF, PDCC.
 
+
 ## How it works
+
 
 - **`index.html`** — the dashboard. On every load it fetches `nav-data.json` (same site,
   so no cross-origin issues) and falls back to the embedded snapshot if offline.
@@ -15,7 +18,9 @@ A self-updating dashboard for 7 CLO closed-end funds: ECC, EIC, OXLC, SPMC, EARN
 - **`.github/workflows/nav-refresh.yml`** — runs the scraper on the 18th of each
   month (plus manually anytime) and commits `nav-data.json` when something changed.
 
+
 ## Fund sources
+
 
 | Fund | Source used by the scraper |
 |------|---------------------------|
@@ -27,11 +32,14 @@ A self-updating dashboard for 7 CLO closed-end funds: ECC, EIC, OXLC, SPMC, EARN
 | OXLC | Press releases (bot-protected — manual check when unreachable) |
 | EARN | Press releases (bot-protected — manual check when unreachable) |
 
+
 OXLC and EARN publish NAVs only as press releases behind bot protection that blocks
 datacenter IPs, so the scraper flags them for a manual check instead of writing
 bad data. Everything else is fully automatic.
 
+
 ## Validation rules
+
 
 A scraped NAV is accepted only if: the month-end date is a real month-end newer
 than the stored one, and the value is within 25% of the stored NAV. Ranges are
