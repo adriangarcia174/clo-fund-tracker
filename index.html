@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLO Fund Tracker</title>
+<style>
+  :root {
+    --bg: #0b0e0f;
+    --panel: #141819;
+    --border: #242c2d;
+    --fg: #e8ecec;
+    --muted: #8f9a9b;
+    --ok: #3fd97c;
+    --bad: #f27070;
+    --warn: #f5b942;
+    --serif: Georgia, 'Times New Roman', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-variant-numeric: tabular-nums; }
+  .clo { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
+  .clo-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .clo-title { font-family: var(--serif); font-weight: 400; font-size: 30px; margin: 0; }
+  .clo-take { color: var(--muted); font-size: 15px; margin: 6px 0 0; min-height: 1.4em; }
+  .clo-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: relative; }
+  .clo-asof { color: var(--muted); font-size: 12px; }
+  .clo-btn { font: inherit; font-size: 14px; color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 14px; cursor: pointer; }
+  .clo-btn:hover { border-color: var(--muted); }
+  .clo-btn:disabled { opacity: .5; cursor: default; }
+  .clo-keypop { display: none; position: absolute; top: 110%; right: 0; z-index: 10; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; width: 300px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+  .clo-keypop.open { display: block; }
+  .clo-keypop p { margin: 0 0 8px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .clo-keypop input { width: 100%; font: inherit; font-size: 13px; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  .clo-keypop .row { display: flex; gap: 8px; }
+  .clo-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: 12px; margin-bottom: 12px; }
+  .clo-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; min-width: 0; }
+  .clo-card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .clo-card .clo-note { margin: 0 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .clo-tile-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 0 0 6px; }
+  .clo-tile-num { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.1; min-height: 1.1em; }
+  .clo-tile-sub { color: var(--muted); font-size: 12px; margin-top: 6px; min-height: 1.2em; line-height: 1.4; }
+  .clo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 12px; margin-bottom: 12px; }
+  .clo-chart { position: relative; min-height: 15rem; }
+  .clo-chart svg { display: block; width: 100%; height: auto; }
+  .clo-tip { position: absolute; pointer-events: none; display: none; background: #1e2425; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.5); padding: 6px 10px; font-size: 12px; white-space: nowrap; z-index: 5; }
+  .clo-tip .clo-tip-h { color: var(--muted); margin-bottom: 2px; }
+  .clo-tablebox { overflow: auto; max-height: 36rem; }
+  .clo table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  .clo th, .clo td { padding: 7px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  .clo th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; font-size: 11px; vertical-align: bottom; cursor: pointer; user-select: none; }
+  .clo th:hover { color: var(--fg); }
+  .clo th[aria-sort="ascending"]::after { content: " \25B2"; }
+  .clo th[aria-sort="descending"]::after { content: " \25BC"; }
+  .clo th:first-child, .clo td:first-child { text-align: left; position: sticky; left: 0; background: var(--panel); z-index: 1; }
+  .clo th:first-child { z-index: 2; }
+  .clo td:first-child { font-weight: 600; }
+  .clo-up { color: var(--ok); }
+  .clo-dn { color: var(--bad); }
+  .clo tr:last-child td { border-bottom: 0; }
+  .clo-foot { color: var(--muted); font-size: 12px; margin: 10px 0 0; line-height: 1.5; }
+  .clo-upd { margin-bottom: 12px; }
+  .clo-upd-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .clo-upd-list li { display: flex; gap: 10px; align-items: baseline; font-size: 14px; line-height: 1.45; }
+  .clo-badge { flex: none; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); }
+  .clo-badge.new { color: var(--ok); border-color: currentColor; }
+  .clo-badge.wait { color: var(--warn); border-color: currentColor; }
+  .clo-upd-sub { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .clo tr.clo-changed td { background: rgba(63, 217, 124, .09); }
+  .clo tr.clo-changed td:first-child::after { content: " \25CF"; color: var(--ok); font-size: .7em; vertical-align: middle; }
+  .clo-src { color: var(--muted); font-size: 11px; margin-top: 16px; line-height: 1.6; }
+  .clo-src a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="clo">
+  <div class="clo-head">
+    <div>
+      <h1 class="clo-title">CLO fund tracker</h1>
+      <p class="clo-take" id="takeaway">&mdash;</p>
+    </div>
+    <div class="clo-tools">
+      <span class="clo-asof">Prices as of <span id="price-asof">&mdash;</span></span>
+      <button class="clo-btn" id="btn-refresh" type="button">Refresh prices</button>
+      <button class="clo-btn" id="btn-key" type="button" title="Set a free Finnhub API key for live price refresh">API key</button>
+      <div class="clo-keypop" id="keypop">
+        <p>Paste a free <a href="https://finnhub.io" target="_blank" rel="noopener" style="color:var(--fg)">finnhub.io</a> API key for live price refresh. It stays in this browser only (localStorage) \u2014 never sent anywhere except Finnhub's quote API.</p>
+        <input id="keyinput" type="text" placeholder="Finnhub API key" autocomplete="off" spellcheck="false">
+        <div class="row">
+          <button class="clo-btn" id="btn-savekey" type="button">Save</button>
+          <button class="clo-btn" id="btn-clearkey" type="button">Clear</button>
+        </div>
+        <p id="keystatus" style="margin:8px 0 0"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="clo-tiles" id="tiles">
+    <div class="clo-card">
+      <p class="clo-tile-label">Avg yield</p>
+      <div class="clo-tile-num clo-up" id="t-yield">&mdash;</div>
+      <div class="clo-tile-sub">Annualized distribution on live price, simple average</div>
+    </div>
+    <div class="clo-card">
+      <p class="clo-tile-label">Avg prem/disc</p>
+      <div class="clo-tile-num" id="t-premdisc">&mdash;</div>
+      <div class="clo-tile-sub">Live price vs latest NAV, simple average</div>
+    </div>
+    <div class="clo-card">
+      <p class="clo-tile-label">Total mkt cap</p>
+      <div class="clo-tile-num" id="t-mktcap">&mdash;</div>
+      <div class="clo-tile-sub">Live price &times; shares out, $mm</div>
+    </div>
+    <div class="clo-card">
+      <p class="clo-tile-label">Avg NII coverage</p>
+      <div class="clo-tile-num" id="t-nii">&mdash;</div>
+      <div class="clo-tile-sub">Quarterly NII &divide; quarterly distribution</div>
+    </div>
+  </div>
+
+  <div class="clo-card clo-upd" id="nav-updates">
+    <h3>NAV updates</h3>
+    <p class="clo-note" id="upd-checked">&mdash;</p>
+    <ul class="clo-upd-list" id="upd-list"></ul>
+    <p class="clo-upd-sub" id="upd-wait"></p>
+    <p class="clo-upd-sub">Funds post NAVs as press releases and filings this page can't read on its own &mdash; send new NAVs to Timmy and he'll update the embedded data.</p>
+  </div>
+
+  <div class="clo-grid">
+    <div class="clo-card" id="chart-premdisc">
+      <h3>Premium / discount to NAV</h3>
+      <p class="clo-note">Live price against the latest posted NAV. Everything left of the line trades below NAV.</p>
+      <div class="clo-chart" id="chart1"><div class="clo-tip"></div></div>
+    </div>
+    <div class="clo-card" id="chart-cover">
+      <h3>NII coverage of distribution</h3>
+      <p class="clo-note">Last quarter's net investment income per share as a share of the quarterly payout. Under 100% means the distribution is not covered by NII.</p>
+      <div class="clo-chart" id="chart2"><div class="clo-tip"></div></div>
+    </div>
+  </div>
+
+  <div class="clo-card" id="fund-table">
+    <h3>Funds</h3>
+    <p class="clo-note">Click a column to sort. Price, market cap, premium/discount and yield move with the price feed; NAV, shares and distributions are from the latest posted figures.</p>
+    <div class="clo-tablebox">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th data-field="ticker" data-type="text">Ticker</th>
+            <th data-field="price" data-type="num">Live price</th>
+            <th data-field="day_chg_pct" data-type="num">Day</th>
+            <th data-field="sh_out_mm" data-type="num">Sh out (mm)</th>
+            <th data-field="mkt_cap_mm" data-type="num">Mkt cap ($mm)</th>
+            <th data-field="latest_nav_date" data-type="date">Latest NAV date</th>
+            <th data-field="latest_nav" data-type="num">Latest NAV</th>
+            <th data-field="prior_nav_date" data-type="date">Prior NAV date</th>
+            <th data-field="prior_nav" data-type="num">Prior NAV</th>
+            <th data-field="nav_chg" data-type="num">Chg in NAV</th>
+            <th data-field="prem_disc" data-type="num">Prem/disc</th>
+            <th data-field="nii_qtr" data-type="num">NII/sh (qtr)</th>
+            <th data-field="current_dist" data-type="num">Current dist</th>
+            <th data-field="qtrly_dist" data-type="num">Qtrly dist</th>
+            <th data-field="freq" data-type="num">Freq</th>
+            <th data-field="nii_cover" data-type="num">NII/dist</th>
+            <th data-field="ann_yield" data-type="num">Ann yield</th>
+            <th data-field="nav_post_date" data-type="date">NAV post date</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="clo-foot">Prem/disc = price &divide; latest NAV &minus; 1 &middot; Ann yield = current monthly dist &times; 12 &divide; price &middot; NII/dist = quarterly NII &divide; quarterly dist.</p>
+  </div>
+
+  <p class="clo-src" id="srcnote"></p>
+</div>
+
+<script>
+/* ---------- Embedded fund data (from clo-fund-data-v3.json, checked 2026-10-12) ---------- */
+const FUNDS = [
+ { ticker:"ECC", name:"Eagle Point Credit Co", sh_out_mm:133.29, latest_nav_date:"2026-08-31", latest_nav:4.34, prior_nav_date:"2026-07-31", prior_nav:4.37, nii_qtr:0.17, current_dist:0.06, qtrly_dist:0.18, freq:12, nav_post_date:"2026-09-14", checked_on:"2026-10-12", changed_on:"", update_note:"" },
+ { ticker:"EIC", name:"Eagle Point Income Co", sh_out_mm:23.05, latest_nav_date:"2026-08-31", latest_nav:12.43, prior_nav_date:"2026-07-31", prior_nav:12.35, nii_qtr:0.37, current_dist:0.11, qtrly_dist:0.33, freq:12, nav_post_date:"2026-09-14", checked_on:"2026-10-12", changed_on:"2026-10-12", update_note:"Prior-month NAV corrected to $12.35, the midpoint of the published July range (was $12.36)." },
+ { ticker:"OXLC", name:"Oxford Lane Capital", sh_out_mm:98.0, latest_nav_date:"2026-08-31", latest_nav:10.49, prior_nav_date:"2026-07-31", prior_nav:10.66, nii_qtr:0.51, current_dist:0.20, qtrly_dist:0.60, freq:12, nav_post_date:"2026-09-14", checked_on:"2026-10-12", changed_on:"", update_note:"" },
+ { ticker:"SPMC", name:"Sound Point Meridian Capital", sh_out_mm:20.84, latest_nav_date:"2026-09-30", latest_nav:9.09, prior_nav_date:"2026-08-31", prior_nav:9.57, nii_qtr:0.28, current_dist:0.13, qtrly_dist:0.39, freq:12, nav_post_date:"2026-10-09", checked_on:"2026-10-12", changed_on:"2026-10-12", update_note:"New 9/30 NAV $9.09 (was 8/31 $9.57). Monthly distribution cut to $0.13 from $0.20 starting October." },
+ { ticker:"EARN", name:"Ellington Credit Co", sh_out_mm:39.3, latest_nav_date:"2026-08-31", latest_nav:4.16, prior_nav_date:"2026-07-31", prior_nav:4.23, nii_qtr:0.16, current_dist:0.08, qtrly_dist:0.24, freq:12, nav_post_date:"2026-09-18", checked_on:"2026-10-12", changed_on:"", update_note:"" },
+ { ticker:"CCIF", name:"Carlyle Credit Income Fund", sh_out_mm:21.2, latest_nav_date:"2026-08-31", latest_nav:3.23, prior_nav_date:"2026-07-31", prior_nav:3.24, nii_qtr:0.07, current_dist:0.06, qtrly_dist:0.18, freq:12, nav_post_date:"2026-09-15", checked_on:"2026-10-12", changed_on:"", update_note:"" },
+ { ticker:"PDCC", name:"Pearl Diver Credit Co", sh_out_mm:6.8, latest_nav_date:"2026-08-31", latest_nav:10.86, prior_nav_date:"2026-07-31", prior_nav:10.96, nii_qtr:0.33, current_dist:0.13, qtrly_dist:0.39, freq:12, nav_post_date:"2026-09-11", checked_on:"2026-10-12", changed_on:"2026-10-12", update_note:"August NAV $10.86 confirmed by fund 8-K filed 9/15/2026 (was carried unverified)." }
+];
+
+/* ---------- Embedded price snapshot: Nasdaq official close, Mon 10/12/2026 4:00 PM ET ---------- */
+let PRICES = {
+  ECC:  { price: 3.10, chg_pct:  0.0032 },
+  EIC:  { price: 8.99, chg_pct:  0.0011 },
+  OXLC: { price: 8.60, chg_pct:  0.0047 },
+  SPMC: { price: 7.72, chg_pct: -0.0153 },
+  EARN: { price: 3.42, chg_pct:  0.0029 },
+  CCIF: { price: 2.29, chg_pct: -0.0255 },
+  PDCC: { price: 7.95, chg_pct:  0.0    }
+};
+let PRICE_LABEL = "10/12/2026 Nasdaq close (4:00 PM ET)";
+let CHANGED = new Set(); // derived from changed_on dates (recent changes highlight)
+let DATA_ASOF = null;    // max checked_on from the loaded dataset
+
+function refreshChangedSet() {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 60);
+  CHANGED = new Set(FUNDS.filter((f) => f.changed_on && new Date(f.changed_on + "T12:00:00") >= cutoff).map((f) => f.ticker));
+  const dates = FUNDS.map((f) => f.checked_on).filter(Boolean).sort();
+  DATA_ASOF = dates.length ? dates[dates.length - 1] : null;
+}
+
+/* ---------- Derived rows (same math as the dashboard) ---------- */
+function buildRows() {
+  return FUNDS.map((f) => {
+    const q = PRICES[f.ticker] || {};
+    const price = q.price != null ? Number(q.price) : null;
+    const nav = Number(f.latest_nav), prior = Number(f.prior_nav), sh = Number(f.sh_out_mm);
+    const dist = Number(f.current_dist), qd = Number(f.qtrly_dist), nii = Number(f.nii_qtr), freq = Number(f.freq);
+    return {
+      ticker: f.ticker, name: f.name,
+      price, day_chg_pct: q.chg_pct != null ? Number(q.chg_pct) : null,
+      sh_out_mm: sh, mkt_cap_mm: price == null ? null : price * sh,
+      latest_nav_date: f.latest_nav_date, latest_nav: nav, prior_nav_date: f.prior_nav_date, prior_nav: prior,
+      nav_chg: nav / prior - 1, prem_disc: price == null ? null : price / nav - 1,
+      nii_qtr: nii, current_dist: dist, qtrly_dist: qd, freq, nii_cover: nii / qd,
+      ann_yield: price == null ? null : dist * freq / price, nav_post_date: f.nav_post_date
+    };
+  });
+}
+function buildSummary(rows) {
+  const priced = rows.filter((r) => r.price != null);
+  const avg = (k) => priced.length ? priced.reduce((s, r) => s + r[k], 0) / priced.length : null;
+  const widest = priced.length ? priced.reduce((a, b) => (a.prem_disc < b.prem_disc ? a : b)) : null;
+  const uncovered = rows.filter((r) => r.nii_cover < 1).map((r) => r.ticker);
+  return {
+    avg_yield: avg('ann_yield'), avg_prem_disc: avg('prem_disc'),
+    avg_nii_cover: rows.length ? rows.reduce((s, r) => s + r.nii_cover, 0) / rows.length : null,
+    total_mkt_cap_mm: priced.reduce((s, r) => s + r.mkt_cap_mm, 0),
+    takeaway: widest
+      ? widest.ticker + " trades at the deepest discount (" + (widest.prem_disc * 100).toFixed(1) + "% to NAV); " +
+        uncovered.length + " of " + rows.length + " funds paid out more than they earned last quarter."
+      : null
+  };
+}
+
+/* ---------- Formatting (no library) ---------- */
+const _n2 = (v, d) => Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmt = {
+  usd: (v) => '$' + _n2(v, 2),
+  num2: (v) => _n2(v, 2),
+  usd3: (v) => '$' + _n2(v, 3),
+  int: (v) => Math.round(v).toLocaleString('en-US'),
+  pct1: (v) => (v < 0 ? '\u2212' : '+') + Math.abs(v * 100).toFixed(1) + '%',
+  pct1u: (v) => (v * 100).toFixed(1) + '%',
+  pct0: (v) => Math.round(v * 100) + '%',
+  mm: (v) => '$' + _n2(v, 2) + 'mm',
+  date: (s) => { if (!s) return ''; const p = String(s).slice(0, 10).split('-'); return (+p[1]) + '/' + (+p[2]) + '/' + p[0]; }
+};
+const signClass = (v) => v == null ? '' : v > 0 ? 'clo-up' : v < 0 ? 'clo-dn' : '';
+const COLS = {
+  ticker: { f: (v) => v },
+  price: { f: fmt.usd },
+  day_chg_pct: { f: fmt.pct1, c: signClass },
+  sh_out_mm: { f: fmt.num2 },
+  mkt_cap_mm: { f: (v) => '$' + fmt.num2(v) },
+  latest_nav_date: { f: fmt.date }, latest_nav: { f: fmt.usd },
+  prior_nav_date: { f: fmt.date }, prior_nav: { f: fmt.usd },
+  nav_chg: { f: fmt.pct1, c: signClass },
+  prem_disc: { f: fmt.pct1, c: signClass },
+  nii_qtr: { f: fmt.usd3 }, current_dist: { f: fmt.usd3 }, qtrly_dist: { f: fmt.usd3 },
+  freq: { f: fmt.int },
+  nii_cover: { f: fmt.pct0, c: (v) => v >= 1 ? 'clo-up' : 'clo-dn' },
+  ann_yield: { f: fmt.pct1u, c: () => 'clo-up' },
+  nav_post_date: { f: fmt.date }
+};
+
+/* ---------- Render ---------- */
+let ROWS = buildRows(), sortKey = null, sortDir = 1;
+const table = document.querySelector('#tbl'), tbody = table.querySelector('tbody');
+
+function drawTiles() {
+  const s = buildSummary(ROWS);
+  const set = (id, txt, cls) => { const el = document.getElementById(id); el.textContent = txt; if (cls !== undefined) el.className = 'clo-tile-num ' + cls; };
+  set('t-yield', s.avg_yield == null ? '\u2014' : fmt.pct1u(s.avg_yield), 'clo-up');
+  set('t-premdisc', s.avg_prem_disc == null ? '\u2014' : fmt.pct1(s.avg_prem_disc), signClass(s.avg_prem_disc));
+  set('t-mktcap', s.total_mkt_cap_mm == null ? '\u2014' : fmt.mm(s.total_mkt_cap_mm), '');
+  set('t-nii', s.avg_nii_cover == null ? '\u2014' : fmt.pct0(s.avg_nii_cover), s.avg_nii_cover >= 1 ? 'clo-up' : 'clo-dn');
+  document.getElementById('takeaway').textContent = s.takeaway || '\u2014';
+  document.getElementById('price-asof').textContent = PRICE_LABEL;
+}
+
+function drawUpdates() {
+  const checked = document.getElementById('upd-checked'), list = document.getElementById('upd-list'), wait = document.getElementById('upd-wait');
+  const lastCheck = FUNDS.map((r) => r.checked_on).filter(Boolean).sort().pop();
+  checked.textContent = lastCheck ? 'Fund sources last checked ' + fmt.date(lastCheck) + '.' : '';
+  const changed = FUNDS.filter((r) => CHANGED.has(r.ticker) && r.update_note);
+  list.replaceChildren(...(changed.length ? changed.map((r) => {
+    const li = document.createElement('li');
+    const b = document.createElement('span'); b.className = 'clo-badge new'; b.textContent = r.ticker;
+    const t = document.createElement('span'); t.textContent = r.update_note;
+    li.append(b, t); return li;
+  }) : [Object.assign(document.createElement('li'), { textContent: 'No changes in the last check.' })]));
+  const now = new Date();
+  const lastMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10);
+  const waiting = FUNDS.filter((r) => String(r.latest_nav_date).slice(0, 10) < lastMonthEnd).map((r) => r.ticker);
+  wait.replaceChildren();
+  if (waiting.length) {
+    const b = document.createElement('span'); b.className = 'clo-badge wait'; b.textContent = 'Waiting';
+    wait.append(b, document.createTextNode(' ' + fmt.date(lastMonthEnd) + ' NAV not yet in the data for: ' + waiting.join(', ') + '.'));
+  } else {
+    wait.textContent = 'All funds are current through ' + fmt.date(lastMonthEnd) + '.';
+  }
+}
+
+function drawTable() {
+  let rows = ROWS.slice();
+  if (sortKey) {
+    const th = table.querySelector('th[data-field="' + sortKey + '"]');
+    const type = th.dataset.type;
+    rows.sort((a, b) => {
+      const x = a[sortKey], y = b[sortKey];
+      if (x == null) return 1; if (y == null) return -1;
+      return (type === 'text' || type === 'date' ? String(x).localeCompare(String(y)) : x - y) * sortDir;
+    });
+  }
+  table.querySelectorAll('th').forEach((th) => {
+    if (th.dataset.field === sortKey) th.setAttribute('aria-sort', sortDir > 0 ? 'ascending' : 'descending');
+    else th.removeAttribute('aria-sort');
+  });
+  const ths = table.querySelectorAll('th');
+  tbody.replaceChildren(...rows.map((r) => {
+    const tr = document.createElement('tr');
+    if (CHANGED.has(r.ticker)) tr.className = 'clo-changed';
+    for (const th of ths) {
+      const k = th.dataset.field, col = COLS[k], v = r[k];
+      const td = document.createElement('td');
+      td.textContent = v == null || Number.isNaN(v) ? '\u2014' : col.f(v);
+      if (col.c && v != null) td.className = col.c(v);
+      tr.appendChild(td);
+    }
+    return tr;
+  }));
+}
+table.querySelectorAll('th').forEach((th) => th.addEventListener('click', () => {
+  const k = th.dataset.field;
+  sortDir = sortKey === k ? -sortDir : 1; sortKey = k; drawTable();
+}));
+
+/* ---------- Bar charts (plain SVG, no library) ---------- */
+const SVGNS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs, parent) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(el);
+  return el;
+}
+function niceScale(lo, hi, maxTicks) {
+  if (!(hi > lo)) hi = lo + 1;
+  const step0 = (hi - lo) / maxTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const norm = step0 / mag;
+  const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag;
+  return { lo: Math.floor(lo / step) * step, hi: Math.ceil(hi / step) * step, step: step };
+}
+const _meas = document.createElement('canvas').getContext('2d');
+function drawBars(box, rows, key, opts) {
+  const tip = box.querySelector('.clo-tip');
+  box.querySelectorAll('svg').forEach((s) => s.remove());
+  const W = Math.max(240, box.clientWidth), rowH = 26;
+  const margin = { top: 6, right: 56, bottom: 22, left: 8 };
+  const data = rows.filter((r) => r[key] != null && !Number.isNaN(r[key])).slice().sort((a, b) => b[key] - a[key]);
+  if (!data.length) return;
+  const H = margin.top + margin.bottom + data.length * rowH;
+  box.style.minHeight = H + 'px';
+  const svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%' }, box);
+  _meas.font = '12px sans-serif';
+  const labelW = Math.max.apply(null, data.map((d) => _meas.measureText(d.ticker).width)) + 10;
+  const x0 = margin.left + labelW, x1 = W - margin.right;
+  const sc = niceScale(Math.min(opts.base, ...data.map((d) => d[key])), Math.max(opts.base, ...data.map((d) => d[key])), 5);
+  const X = (v) => x0 + (v - sc.lo) / (sc.hi - sc.lo) * (x1 - x0);
+  const bandH = (H - margin.top - margin.bottom) / data.length;
+  const bh = bandH * 0.75;
+  const Y = (i) => margin.top + i * bandH + (bandH - bh) / 2;
+  const axisY = H - margin.bottom;
+  for (let t = sc.lo; t <= sc.hi + 1e-9; t += sc.step) {
+    svgEl('line', { x1: X(t), x2: X(t), y1: margin.top, y2: axisY, stroke: '#1d2324' }, svg);
+    const tx = svgEl('text', { x: X(t), y: axisY + 14, 'text-anchor': 'middle', 'font-size': 11, fill: '#8f9a9b' }, svg);
+    tx.textContent = opts.fmt(t);
+  }
+  svgEl('line', { x1: X(opts.base), x2: X(opts.base), y1: margin.top, y2: axisY, stroke: '#5a6667', 'stroke-dasharray': '3 3' }, svg);
+  const bars = [];
+  data.forEach((d, i) => {
+    const lab = svgEl('text', { x: margin.left, y: Y(i) + bh / 2, dy: '0.35em', 'font-size': 12, fill: '#e8ecec' }, svg);
+    lab.textContent = d.ticker;
+    const bx = Math.min(X(opts.base), X(d[key]));
+    const bw = Math.max(Math.abs(X(d[key]) - X(opts.base)), 1);
+    const rect = svgEl('rect', { x: bx, y: Y(i), width: bw, height: bh, rx: 4, fill: opts.color(d[key]) }, svg);
+    bars.push(rect);
+    const above = d[key] >= opts.base;
+    const vx = svgEl('text', { x: above ? X(d[key]) + 4 : X(d[key]) - 4, 'text-anchor': above ? 'start' : 'end',
+      y: Y(i) + bh / 2, dy: '0.35em', 'font-size': 11, fill: '#8f9a9b' }, svg);
+    vx.textContent = opts.fmt(d[key]);
+    rect.addEventListener('mousemove', (event) => {
+      tip.replaceChildren(
+        Object.assign(document.createElement('div'), { className: 'clo-tip-h', textContent: d.ticker + ' \u00B7 ' + d.name }),
+        ...opts.tip(d).map((s) => Object.assign(document.createElement('div'), { textContent: s })));
+      tip.style.display = 'block';
+      const bw2 = box.clientWidth, tw = tip.offsetWidth;
+      tip.style.left = Math.min(event.offsetX + 12, bw2 - tw - 4) + 'px';
+      tip.style.top = Math.max(0, event.offsetY - tip.offsetHeight - 8) + 'px';
+      bars.forEach((b) => b.setAttribute('opacity', b === rect ? 1 : 0.55));
+    });
+    rect.addEventListener('mouseleave', () => { tip.style.display = 'none'; bars.forEach((b) => b.setAttribute('opacity', 1)); });
+  });
+}
+
+function drawCharts() {
+  drawBars(document.getElementById('chart1'), ROWS, 'prem_disc', {
+    base: 0, fmt: fmt.pct1, color: (v) => (v >= 0 ? '#3fd97c' : '#f27070'),
+    tip: (d) => ['Price ' + fmt.usd(d.price) + ' \u00B7 NAV ' + fmt.usd(d.latest_nav), 'Prem/disc ' + fmt.pct1(d.prem_disc)]
+  });
+  drawBars(document.getElementById('chart2'), ROWS, 'nii_cover', {
+    base: 1, fmt: fmt.pct0, color: (v) => (v >= 1 ? '#3fd97c' : '#f27070'),
+    tip: (d) => ['NII ' + fmt.usd3(d.nii_qtr) + ' vs dist ' + fmt.usd3(d.qtrly_dist) + ' per qtr', 'Coverage ' + fmt.pct0(d.nii_cover)]
+  });
+}
+
+function drawAll() { ROWS = buildRows(); drawTiles(); drawUpdates(); drawTable(); drawCharts(); }
+
+/* ---------- Live refresh via Finnhub (free key, stored in this browser only) ---------- */
+const KEY_LS = 'clo_finnhub_key';
+const btnRefresh = document.getElementById('btn-refresh');
+const keypop = document.getElementById('keypop');
+document.getElementById('btn-key').addEventListener('click', (e) => {
+  e.stopPropagation();
+  keypop.classList.toggle('open');
+  const k = localStorage.getItem(KEY_LS);
+  document.getElementById('keystatus').textContent = k ? 'Key saved \u2713 (live refresh enabled)' : 'No key saved \u2014 paste a free finnhub.io key for live prices.';
+});
+document.addEventListener('click', (e) => { if (!keypop.contains(e.target)) keypop.classList.remove('open'); });
+document.getElementById('btn-savekey').addEventListener('click', () => {
+  const v = document.getElementById('keyinput').value.trim();
+  if (v) { localStorage.setItem(KEY_LS, v); document.getElementById('keyinput').value = ''; }
+  document.getElementById('keystatus').textContent = v || localStorage.getItem(KEY_LS) ? 'Key saved \u2713 (live refresh enabled)' : 'No key saved.';
+});
+document.getElementById('btn-clearkey').addEventListener('click', () => {
+  localStorage.removeItem(KEY_LS);
+  document.getElementById('keystatus').textContent = 'Key cleared \u2014 refresh uses the embedded snapshot.';
+});
+
+btnRefresh.addEventListener('click', async () => {
+  const key = localStorage.getItem(KEY_LS);
+  if (!key) {
+    document.getElementById('price-asof').textContent = PRICE_LABEL + ' \u2014 add a free Finnhub API key (API key button) for live refresh';
+    return;
+  }
+  btnRefresh.disabled = true; btnRefresh.textContent = 'Refreshing\u2026';
+  try {
+    const out = {};
+    for (const t of Object.keys(PRICES)) {
+      const r = await fetch('https://finnhub.io/api/v1/quote?symbol=' + t + '&token=' + encodeURIComponent(key));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const q = await r.json();
+      if (q.c == null || q.c === 0) throw new Error('No quote for ' + t);
+      out[t] = { price: q.c, chg_pct: q.dp != null ? q.dp / 100 : null };
+    }
+    PRICES = out;
+    const now = new Date();
+    PRICE_LABEL = 'live via Finnhub, ' + now.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    drawAll();
+  } catch (err) {
+    document.getElementById('price-asof').textContent = PRICE_LABEL + ' \u2014 refresh failed (' + err.message + ')';
+  } finally {
+    btnRefresh.disabled = false; btnRefresh.textContent = 'Refresh prices';
+  }
+});
+
+/* ---------- Source note + init ---------- */
+refreshChangedSet();
+document.getElementById('srcnote').innerHTML =
+  'Fund data loads from nav-data.json, refreshed monthly by an automated job (fund sources last checked ' +
+  (DATA_ASOF ? fmt.date(DATA_ASOF) : '10/12/2026') + '; per-fund sources in the data file). ' +
+  'Prices: Nasdaq official close 10/12/2026 4:00 PM ET embedded as snapshot; live refresh via optional Finnhub key. ' +
+  'ECC is included as a tracked fund even though the position was sold 10/7/2026. ' +
+  'This page is fully self-contained \u2014 no external libraries, works offline.';
+
+/* ---------- Self-update: pull the latest nav-data.json on every load ---------- */
+async function loadRemoteData() {
+  try {
+    const r = await fetch('nav-data.json', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (!Array.isArray(j) || !j.length || !j.every((f) => f.ticker && f.latest_nav != null)) return;
+    FUNDS.length = 0;
+    for (const f of j) FUNDS.push(f);
+    refreshChangedSet();
+  } catch (e) { /* keep the embedded snapshot */ }
+}
+loadRemoteData().finally(() => drawAll());
+</script>
+</body>
+</html>
