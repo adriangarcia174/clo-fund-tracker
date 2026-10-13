@@ -81,17 +81,6 @@
     </div>
     <div class="clo-tools">
       <span class="clo-asof">Prices as of <span id="price-asof">&mdash;</span></span>
-      <button class="clo-btn" id="btn-refresh" type="button">Refresh prices</button>
-      <button class="clo-btn" id="btn-key" type="button" title="Set a free Finnhub API key for live price refresh">API key</button>
-      <div class="clo-keypop" id="keypop">
-        <p>Paste a free <a href="https://finnhub.io" target="_blank" rel="noopener" style="color:var(--fg)">finnhub.io</a> API key for live price refresh. It stays in this browser only (localStorage) \u2014 never sent anywhere except Finnhub's quote API.</p>
-        <input id="keyinput" type="text" placeholder="Finnhub API key" autocomplete="off" spellcheck="false">
-        <div class="row">
-          <button class="clo-btn" id="btn-savekey" type="button">Save</button>
-          <button class="clo-btn" id="btn-clearkey" type="button">Clear</button>
-        </div>
-        <p id="keystatus" style="margin:8px 0 0"></p>
-      </div>
     </div>
   </div>
 
@@ -426,62 +415,13 @@ function drawCharts() {
 
 function drawAll() { ROWS = buildRows(); drawTiles(); drawUpdates(); drawTable(); drawCharts(); }
 
-/* ---------- Live refresh via Finnhub (free key, stored in this browser only) ---------- */
-const KEY_LS = 'clo_finnhub_key';
-const btnRefresh = document.getElementById('btn-refresh');
-const keypop = document.getElementById('keypop');
-document.getElementById('btn-key').addEventListener('click', (e) => {
-  e.stopPropagation();
-  keypop.classList.toggle('open');
-  const k = localStorage.getItem(KEY_LS);
-  document.getElementById('keystatus').textContent = k ? 'Key saved \u2713 (live refresh enabled)' : 'No key saved \u2014 paste a free finnhub.io key for live prices.';
-});
-document.addEventListener('click', (e) => { if (!keypop.contains(e.target)) keypop.classList.remove('open'); });
-document.getElementById('btn-savekey').addEventListener('click', () => {
-  const v = document.getElementById('keyinput').value.trim();
-  if (v) { localStorage.setItem(KEY_LS, v); document.getElementById('keyinput').value = ''; }
-  document.getElementById('keystatus').textContent = v || localStorage.getItem(KEY_LS) ? 'Key saved \u2713 (live refresh enabled)' : 'No key saved.';
-});
-document.getElementById('btn-clearkey').addEventListener('click', () => {
-  localStorage.removeItem(KEY_LS);
-  document.getElementById('keystatus').textContent = 'Key cleared \u2014 refresh uses the embedded snapshot.';
-});
-
-btnRefresh.addEventListener('click', async () => {
-  const key = localStorage.getItem(KEY_LS);
-  if (!key) {
-    document.getElementById('price-asof').textContent = PRICE_LABEL + ' \u2014 add a free Finnhub API key (API key button) for live refresh';
-    return;
-  }
-  btnRefresh.disabled = true; btnRefresh.textContent = 'Refreshing\u2026';
-  try {
-    const out = {};
-    for (const t of Object.keys(PRICES)) {
-      const r = await fetch('https://finnhub.io/api/v1/quote?symbol=' + t + '&token=' + encodeURIComponent(key));
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const q = await r.json();
-      if (q.c == null || q.c === 0) throw new Error('No quote for ' + t);
-      out[t] = { price: q.c, chg_pct: q.dp != null ? q.dp / 100 : null };
-    }
-    PRICES = out;
-    const now = new Date();
-    PRICE_LABEL = 'live via Finnhub, ' + now.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-    drawAll();
-  } catch (err) {
-    document.getElementById('price-asof').textContent = PRICE_LABEL + ' \u2014 refresh failed (' + err.message + ')';
-  } finally {
-    btnRefresh.disabled = false; btnRefresh.textContent = 'Refresh prices';
-  }
-});
-
 /* ---------- Source note + init ---------- */
 refreshChangedSet();
 document.getElementById('srcnote').innerHTML =
-  'Fund data loads from nav-data.json, refreshed monthly by an automated job (fund sources last checked ' +
+  'Fund data and prices load from nav-data.json, refreshed daily by an automated job (fund sources last checked ' +
   (DATA_ASOF ? fmt.date(DATA_ASOF) : '10/12/2026') + '; per-fund sources in the data file). ' +
-  'Prices: Nasdaq official close 10/12/2026 4:00 PM ET embedded as snapshot; live refresh via optional Finnhub key. ' +
   'ECC is included as a tracked fund even though the position was sold 10/7/2026. ' +
-  'This page is fully self-contained \u2014 no external libraries, works offline.';
+  'This page is fully self-contained \u2014 no external libraries, no API keys, works offline.';
 
 /* ---------- Self-update: pull the latest nav-data.json on every load ---------- */
 async function loadRemoteData() {
@@ -489,9 +429,19 @@ async function loadRemoteData() {
     const r = await fetch('nav-data.json', { cache: 'no-store' });
     if (!r.ok) return;
     const j = await r.json();
-    if (!Array.isArray(j) || !j.length || !j.every((f) => f.ticker && f.latest_nav != null)) return;
+    const funds = Array.isArray(j) ? j : j.funds;
+    if (!Array.isArray(funds) || !funds.length || !funds.every((f) => f.ticker && f.latest_nav != null)) return;
     FUNDS.length = 0;
-    for (const f of j) FUNDS.push(f);
+    for (const f of funds) FUNDS.push(f);
+    if (!Array.isArray(j) && j.prices) {
+      for (const t of Object.keys(PRICES)) {
+        if (j.prices[t] && j.prices[t].price) {
+          PRICES[t] = { price: Number(j.prices[t].price),
+                        chg_pct: j.prices[t].chg_pct != null ? Number(j.prices[t].chg_pct) : null };
+        }
+      }
+      if (j.prices_asof) PRICE_LABEL = fmt.date(j.prices_asof) + ' close (daily refresh)';
+    }
     refreshChangedSet();
   } catch (e) { /* keep the embedded snapshot */ }
 }

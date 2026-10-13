@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Monthly NAV scraper for the CLO fund tracker.
+"""Monthly NAV scraper + daily price snapshot for the CLO fund tracker.
 
-Reads nav-data.json (list of fund dicts), checks each fund's OWN sources for a
-month-end NAV newer than the stored latest_nav_date, and updates the JSON in
-place. Also picks up new monthly distribution amounts and quarterly NII
-estimates when they appear in the same sources.
+Reads nav-data.json, checks each fund's OWN sources for a month-end NAV newer
+than the stored latest_nav_date, and refreshes the price snapshot via Finnhub.
+Updates the JSON in place. Also picks up new monthly distribution amounts and
+quarterly NII estimates when they appear in the same sources.
 
 Rules (never violated):
   - Never guess or interpolate a number. A fund is left unchanged unless every
@@ -258,9 +258,53 @@ def apply_update(fund, res):
     return bits
 
 
-def main():
+def load_data():
     with open(DATA_FILE) as fh:
-        funds = json.load(fh)
+        d = json.load(fh)
+    if isinstance(d, list):  # legacy bare-array format
+        d = {"asof": TODAY, "funds": d, "prices": {}, "prices_asof": None}
+    d.setdefault("funds", [])
+    d.setdefault("prices", {})
+    return d
+
+
+def save_data(d):
+    d["asof"] = TODAY
+    with open(DATA_FILE, "w") as fh:
+        json.dump(d, fh, indent=2)
+        fh.write("\n")
+
+
+def refresh_prices(tickers):
+    """Daily price snapshot via Finnhub (key from FINNHUB_KEY env var).
+
+    Returns {ticker: {price, chg_pct}} or None when the key is missing or every
+    quote failed. The key never touches the repo or the page - it lives only as
+    a GitHub Actions secret.
+    """
+    import os
+    key = os.environ.get("FINNHUB_KEY")
+    if not key:
+        print(" - prices: FINNHUB_KEY not set, skipping")
+        return None
+    out = {}
+    for t in tickers:
+        try:
+            r = requests.get("https://finnhub.io/api/v1/quote",
+                             params={"symbol": t, "token": key}, timeout=20)
+            r.raise_for_status()
+            q = r.json()
+            if q.get("c"):
+                out[t] = {"price": q["c"],
+                          "chg_pct": q["dp"] / 100 if q.get("dp") is not None else None}
+        except Exception as e:  # noqa: BLE001 - one bad ticker must not kill the run
+            print(f" - prices: {t} failed ({type(e).__name__})")
+    return out or None
+
+
+def main():
+    d = load_data()
+    funds = d["funds"]
     summary = []
     changed = 0
     for fund in funds:
@@ -283,11 +327,16 @@ def main():
             summary.append(f"{t}: no change ({res.get('detail', '')})")
         else:  # unreachable
             summary.append(f"{t}: UNREACHABLE ({res.get('detail', '')}) - unchanged, needs manual check")
-    if changed:
-        with open(DATA_FILE, "w") as fh:
-            json.dump(funds, fh, indent=2)
-            fh.write("\n")
-    print(f"NAV refresh {TODAY}: {changed} fund(s) updated.")
+    prices = refresh_prices([f["ticker"] for f in funds])
+    prices_changed = False
+    if prices is not None:
+        prices_changed = (prices != d.get("prices"))
+        d["prices"] = prices
+        d["prices_asof"] = TODAY
+    if changed or prices_changed:
+        save_data(d)
+    print(f"Data refresh {TODAY}: {changed} NAV(s) updated, "
+          f"prices {'updated' if prices_changed else 'unchanged'}.")
     for line in summary:
         print(" -", line)
 
