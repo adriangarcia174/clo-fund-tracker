@@ -2,9 +2,14 @@ name: Daily data refresh
 
 on:
   schedule:
-    # Daily 09:00 UTC (04:00 CT, pre-market): refresh prices every day,
+    # Three runs daily (UTC):
+    #  09:00 = 04:00 CT pre-market  — fresh NAV checks + prior-close prices
+    #  16:00 = 11:00 CT midday      — intraday price snapshot
+    #  21:05 = 16:05 CT post-close  — today's closing prices
     # NAVs update whenever the funds publish (usually mid-month)
     - cron: '0 9 * * *'
+    - cron: '0 16 * * *'
+    - cron: '5 21 * * *'
   workflow_dispatch:  # allow manual runs from the Actions tab
 
 permissions:
