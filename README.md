@@ -6,19 +6,21 @@ A self-updating dashboard for 7 CLO closed-end funds: ECC, EIC, OXLC, SPMC, EARN
 
 - **`index.html`** — the dashboard. On every load it fetches `nav-data.json` (same site,
   so no cross-origin issues) and falls back to the embedded snapshot if offline.
-  Prices refresh automatically every morning via the job below; the header's
-  Refresh button pulls the latest published data on demand, and an optional
-  [Finnhub](https://finnhub.io) key — saved in the visitor's own browser via the
-  "API key" button, never committed to this repo — enables live intraday quotes.
+  The header's Refresh button pulls the latest published data on demand —
+  NAVs, distributions and a price snapshot refreshed 3x daily by the job below —
+  and an optional [Finnhub](https://finnhub.io) key, saved in the visitor's own
+  browser via the "API key" button and never committed to this repo, upgrades
+  Refresh to live intraday quotes. Changed values get a green dot.
 - **`nav-data.json`** — the dataset: fund NAV history, distributions, NII, sources,
   plus a daily price snapshot (`prices` / `prices_asof`).
 - **`scrape_nav.py`** — the updater. Reads each fund's **own** sources and writes a
   new NAV only when the parse validates cleanly; refreshes prices via Finnhub
   (key from the `FINNHUB_KEY` repo secret — never in the repo or the page).
   It never guesses.
-- **`.github/workflows/nav-refresh.yml`** — runs the updater daily at 09:00 UTC
-  (04:00 CT, pre-market) plus manually anytime, and commits `nav-data.json` when
-  something changed.
+- **`.github/workflows/nav-refresh.yml`** — runs the updater 3x daily at 09:00 UTC
+  (04:00 CT pre-market), 16:00 UTC (11:00 CT midday) and 21:05 UTC (16:05 CT,
+  just after the close), plus manually anytime, and commits `nav-data.json`
+  when something changed.
 
 ## Fund sources
 
