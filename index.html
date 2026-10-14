@@ -86,7 +86,7 @@
       <button class="clo-btn" id="btn-refresh" type="button">Refresh</button>
       <button class="clo-btn" id="btn-key" type="button" title="Save a free Finnhub API key for live intraday prices">API key</button>
       <div class="clo-keypop" id="keypop">
-        <p>Paste a free <a href="https://finnhub.io" target="_blank" rel="noopener" style="color:var(--fg)">finnhub.io</a> API key for live intraday prices. It stays in this browser only (localStorage) &mdash; never sent anywhere except Finnhub's quote API.</p>
+        <p>Paste a free <a href="https://finnhub.io" target="_blank" rel="noopener" style="color:var(--fg)">finnhub.io</a> API key for live intraday prices on Refresh. Without one, Refresh pulls the latest published data &mdash; NAVs plus a price snapshot refreshed 3&times; daily by the automated job. The key stays in this browser only (localStorage) &mdash; never sent anywhere except Finnhub's quote API.</p>
         <input id="keyinput" type="text" placeholder="Finnhub API key" autocomplete="off" spellcheck="false">
         <div class="row">
           <button class="clo-btn" id="btn-savekey" type="button">Save</button>
@@ -442,7 +442,7 @@ document.getElementById('srcnote').innerHTML =
   'Fund data and prices load from nav-data.json, refreshed daily by an automated job (fund sources last checked ' +
   (DATA_ASOF ? fmt.date(DATA_ASOF) : '10/12/2026') + '; per-fund sources in the data file). ' +
   'ECC is included as a tracked fund even though the position was sold 10/7/2026. ' +
-  'Hit "Refresh" any time to pull the latest data and see what changed (save a Finnhub key via the API key button for live intraday prices). ' +
+  'Hit "Refresh" any time to pull the latest published data (NAVs, distributions, prices &mdash; refreshed 3&times; daily) and see what changed. Save a Finnhub key via the API key button for live intraday prices on Refresh. ' +
   'This page is fully self-contained \u2014 no external libraries, no API keys, works offline.';
 
 /* ---------- Self-update: pull the latest nav-data.json, diff it, dot what changed ---------- */
@@ -498,7 +498,7 @@ async function refreshFromRemote(cacheBust) {
                       chg_pct: j.prices[t].chg_pct != null ? Number(j.prices[t].chg_pct) : null };
       }
     }
-    if (j.prices_asof) PRICE_LABEL = 'latest close \u00B7 data refreshed ' + fmt.date(j.prices_asof) + ' (daily)';
+    if (j.prices_asof) PRICE_LABEL = 'latest snapshot \u00B7 refreshed ' + fmt.date(j.prices_asof) + ' (3\u00D7 daily)';
   }
   refreshChangedSet();
   DOT_FIELDS = diffData(snap);
@@ -507,7 +507,13 @@ async function refreshFromRemote(cacheBust) {
            tickers: [...DOT_FIELDS.keys()] };
 }
 
-/* ---------- Refresh: live intraday via optional Finnhub key, else daily snapshot ---------- */
+/* ---------- Refresh: latest published data; live intraday via optional Finnhub key ---------- */
+function mergeDots(extra) {
+  for (const [t, set] of extra) {
+    if (!DOT_FIELDS.has(t)) DOT_FIELDS.set(t, new Set());
+    for (const k of set) DOT_FIELDS.get(t).add(k);
+  }
+}
 const KEY_LS = 'clo_finnhub_key';
 const btnRefresh = document.getElementById('btn-refresh');
 const keypop = document.getElementById('keypop');
@@ -516,17 +522,17 @@ document.getElementById('btn-key').addEventListener('click', (e) => {
   e.stopPropagation();
   keypop.classList.toggle('open');
   const k = localStorage.getItem(KEY_LS);
-  document.getElementById('keystatus').textContent = k ? 'Key saved \u2713 (live refresh enabled)' : 'No key saved \u2014 paste a free finnhub.io key for live intraday prices.';
+  document.getElementById('keystatus').textContent = k ? 'Key saved \u2713 (Finnhub live prices enabled)' : 'No key saved \u2014 refresh pulls the latest published data (3\u00D7 daily snapshot).';
 });
 document.addEventListener('click', (e) => { if (!keypop.contains(e.target)) keypop.classList.remove('open'); });
 document.getElementById('btn-savekey').addEventListener('click', () => {
   const v = document.getElementById('keyinput').value.trim();
   if (v) { localStorage.setItem(KEY_LS, v); document.getElementById('keyinput').value = ''; }
-  document.getElementById('keystatus').textContent = v || localStorage.getItem(KEY_LS) ? 'Key saved \u2713 (live refresh enabled)' : 'No key saved.';
+  document.getElementById('keystatus').textContent = v || localStorage.getItem(KEY_LS) ? 'Key saved \u2713 (Finnhub live prices enabled)' : 'No key saved.';
 });
 document.getElementById('btn-clearkey').addEventListener('click', () => {
   localStorage.removeItem(KEY_LS);
-  document.getElementById('keystatus').textContent = 'Key cleared \u2014 refresh uses the daily snapshot.';
+  document.getElementById('keystatus').textContent = 'Key cleared \u2014 refresh uses the published snapshot.';
 });
 
 btnRefresh.addEventListener('click', async () => {
@@ -535,7 +541,12 @@ btnRefresh.addEventListener('click', async () => {
   btnRefresh.textContent = 'Refreshing\u2026';
   refreshStatus.textContent = '';
   try {
+    // 1) Latest published dataset: NAVs, distributions, NII, daily price snapshot.
+    const res = await refreshFromRemote(true);
+    if (!res.ok) throw new Error('could not reach the data file \u2014 showing last loaded data');
+    // 2) Live intraday prices when a Finnhub key is saved; otherwise the snapshot prices stand.
     const key = localStorage.getItem(KEY_LS);
+    let priceMsg;
     if (key) {
       const snap = snapshotData();
       const out = {};
@@ -548,26 +559,20 @@ btnRefresh.addEventListener('click', async () => {
         out[t] = { price: q.c, chg_pct: q.dp != null ? q.dp / 100 : null };
       }
       PRICES = out;
-      const now = new Date();
-      PRICE_LABEL = 'live via Finnhub, ' + now.toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-      DOT_FIELDS = diffData(snap);
-      drawAll();
-      const n = [...DOT_FIELDS.values()].reduce((s, x) => s + x.size, 0);
-      refreshStatus.textContent = n
-        ? 'Live prices updated \u2014 ' + n + ' value' + (n === 1 ? '' : 's') + ' changed (' + [...DOT_FIELDS.keys()].join(', ') + ').'
-        : 'Live prices checked \u2014 no changes.';
+      PRICE_LABEL = 'live via Finnhub, ' + new Date().toLocaleString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+      mergeDots(diffData(snap));
+      priceMsg = 'live prices via Finnhub';
     } else {
-      const res = await refreshFromRemote(true);
-      if (!res.ok) {
-        refreshStatus.textContent = 'Could not reach the data file \u2014 showing last loaded data.';
-      } else {
-        drawAll();
-        refreshStatus.textContent = res.changed
-          ? 'Updated just now \u2014 ' + res.changed + ' value' + (res.changed === 1 ? '' : 's') +
-            ' changed (' + res.tickers.join(', ') + ').'
-          : 'Already up to date \u2014 add an API key for live intraday prices.';
-      }
+      // No key: prices come from the latest published snapshot, refreshed
+      // 3x daily by the automated job (pre-market, midday, post-close).
+      priceMsg = 'prices from the latest snapshot (' + PRICE_LABEL + ')';
     }
+    drawAll();
+    const n = [...DOT_FIELDS.values()].reduce((s, x) => s + x.size, 0);
+    const parts = ['Latest data as of ' + (DATA_ASOF ? fmt.date(DATA_ASOF) : '\u2014')];
+    parts.push(n ? n + ' value' + (n === 1 ? '' : 's') + ' changed (' + [...DOT_FIELDS.keys()].join(', ') + ')' : 'no new values since the last check');
+    parts.push(priceMsg);
+    refreshStatus.textContent = parts.join(' \u00B7 ');
   } catch (err) {
     refreshStatus.textContent = 'Refresh failed (' + err.message + ').';
   } finally {
