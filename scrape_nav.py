@@ -175,16 +175,24 @@ def scrape_eaglepoint_nav(fund, url):
     clean = lambda s: re.sub(r"<[^>]+>", "", s).strip()
     parsed = []
     for d, _tot, ps in rows:
-        m = re.search(r"\$([\d.,]+)", clean(ps))
-        if not m:
-            continue
+        text = clean(ps)
+        rm = re.search(r"\$([\d.,]+)\s*(?:[\u2013\u2014\-]|and)\s*\$([\d.,]+)", text)
+        if rm:
+            nav = round((clean_num(rm.group(1)) + clean_num(rm.group(2))) / 2, 2)
+            nav_range = (clean_num(rm.group(1)), clean_num(rm.group(2)))
+        else:
+            m = re.search(r"\$([\d.,]+)", text)
+            if not m:
+                continue
+            nav = round(clean_num(m.group(1)), 2)
+            nav_range = None
         mm, dd, yy = d.split("/")
         iso = f"{yy}-{mm}-{dd}"
         if is_month_end(iso):
-            parsed.append((iso, round(clean_num(m.group(1)), 2)))
+            parsed.append((iso, nav, nav_range))
     if not parsed:
         return {"status": "unreachable", "detail": "no month-end rows parsed"}
-    nav_date, nav = parsed[0]  # table is newest-first
+    nav_date, nav, nav_range = parsed[0]  # table is newest-first
     if nav_date <= fund["latest_nav_date"]:
         return {"status": "no_change", "detail": f"table newest is {nav_date}, not newer"}
     if abs(nav / fund["latest_nav"] - 1) > 0.25:
@@ -203,10 +211,11 @@ def scrape_eaglepoint_nav(fund, url):
                     break
     except Exception:  # noqa: BLE001 - keep the old post date
         pass
+    lo, hi = nav_range if nav_range else (nav, nav)
     return {"status": "updated", "nav_date": nav_date, "nav": nav,
-            "nav_lo": nav, "nav_hi": nav, "post_date": post_date,
+            "nav_lo": lo, "nav_hi": hi, "post_date": post_date,
             "source": f"{fund['ticker']} NAV history table ({url})",
-            "range": False}
+            "range": nav_range is not None}
 
 
 # ------------------------------------------------------------- press wires
