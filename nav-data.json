@@ -1,9 +1,9 @@
 {
-  "asof": "2026-10-14",
+  "asof": "2026-10-15",
   "funds": [
     {
       "changed_on": "2026-10-13",
-      "checked_on": "2026-10-14",
+      "checked_on": "2026-10-15",
       "current_dist": 0.06,
       "freq": 12,
       "latest_nav": 4.17,
@@ -22,7 +22,7 @@
     },
     {
       "changed_on": "2026-10-13",
-      "checked_on": "2026-10-14",
+      "checked_on": "2026-10-15",
       "current_dist": 0.11,
       "freq": 12,
       "latest_nav": 12.39,
@@ -60,7 +60,7 @@
     },
     {
       "changed_on": "2026-10-12",
-      "checked_on": "2026-10-14",
+      "checked_on": "2026-10-15",
       "current_dist": 0.13,
       "freq": 12,
       "latest_nav": 9.09,
@@ -98,7 +98,7 @@
     },
     {
       "changed_on": "",
-      "checked_on": "2026-10-14",
+      "checked_on": "2026-10-15",
       "current_dist": 0.06,
       "freq": 12,
       "latest_nav": 3.23,
@@ -117,7 +117,7 @@
     },
     {
       "changed_on": "2026-10-13",
-      "checked_on": "2026-10-14",
+      "checked_on": "2026-10-15",
       "current_dist": 0.13,
       "freq": 12,
       "latest_nav": 10.67,
@@ -137,33 +137,33 @@
   ],
   "prices": {
     "ECC": {
-      "price": 2.85,
-      "chg_pct": -0.010417000000000001
+      "price": 2.87,
+      "chg_pct": 0.007018
     },
     "EIC": {
-      "price": 8.84,
-      "chg_pct": 0.010286
+      "price": 8.79,
+      "chg_pct": -0.005656
     },
     "OXLC": {
-      "price": 8.22,
-      "chg_pct": -0.014388000000000001
+      "price": 8.27,
+      "chg_pct": 0.006083
     },
     "SPMC": {
-      "price": 7.14,
-      "chg_pct": -0.031208
+      "price": 7.03,
+      "chg_pct": -0.015406
     },
     "EARN": {
-      "price": 3.26,
-      "chg_pct": -0.012121
+      "price": 3.34,
+      "chg_pct": 0.024540000000000003
     },
     "CCIF": {
-      "price": 2.07,
-      "chg_pct": -0.067568
+      "price": 2.04,
+      "chg_pct": -0.014493
     },
     "PDCC": {
-      "price": 8.1,
-      "chg_pct": -0.012195000000000001
+      "price": 8.07,
+      "chg_pct": -0.0037040000000000003
     }
   },
-  "prices_asof": "2026-10-14"
+  "prices_asof": "2026-10-15"
 }
