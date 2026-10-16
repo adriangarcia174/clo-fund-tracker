@@ -97,23 +97,23 @@
       "update_note": ""
     },
     {
-      "changed_on": "",
+      "changed_on": "2026-10-16",
       "checked_on": "2026-10-16",
       "current_dist": 0.06,
       "freq": 12,
-      "latest_nav": 3.23,
-      "latest_nav_date": "2026-08-31",
+      "latest_nav": 3.05,
+      "latest_nav_date": "2026-09-30",
       "name": "Carlyle Credit Income Fund",
-      "nav_basis": "Point value (fund NAV page)",
-      "nav_post_date": "2026-09-15",
-      "nav_source": "carlylecreditincomefund.com/ccif-nav",
+      "nav_basis": "Point value (fund source)",
+      "nav_post_date": "2026-10-16",
+      "nav_source": "CCIF 8-K filed 2026-10-16",
       "nii_qtr": 0.07,
-      "prior_nav": 3.24,
-      "prior_nav_date": "2026-07-31",
+      "prior_nav": 3.23,
+      "prior_nav_date": "2026-08-31",
       "qtrly_dist": 0.18,
       "sh_out_mm": 21.2,
       "ticker": "CCIF",
-      "update_note": ""
+      "update_note": "New 09/30 NAV $3.05 (was 08/31 $3.23)."
     },
     {
       "changed_on": "2026-10-13",
@@ -137,32 +137,32 @@
   ],
   "prices": {
     "ECC": {
-      "price": 2.89,
-      "chg_pct": -0.003448
+      "price": 2.9,
+      "chg_pct": 0.0
     },
     "EIC": {
-      "price": 9.07,
-      "chg_pct": 0.011148
+      "price": 9.1,
+      "chg_pct": 0.014493
     },
     "OXLC": {
-      "price": 7.98,
-      "chg_pct": -0.045454999999999995
+      "price": 7.91,
+      "chg_pct": -0.053827999999999994
     },
     "SPMC": {
-      "price": 6.97,
-      "chg_pct": -0.007123000000000001
+      "price": 6.93,
+      "chg_pct": -0.012821
     },
     "EARN": {
-      "price": 3.49,
-      "chg_pct": 0.048048
+      "price": 3.46,
+      "chg_pct": 0.039039000000000004
     },
     "CCIF": {
-      "price": 2.18,
-      "chg_pct": 0.013953
+      "price": 2.22,
+      "chg_pct": 0.032558
     },
     "PDCC": {
-      "price": 7.76,
-      "chg_pct": -0.039604
+      "price": 7.75,
+      "chg_pct": -0.040842
     }
   },
   "prices_asof": "2026-10-16"
